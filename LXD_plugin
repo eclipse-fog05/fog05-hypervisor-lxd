@@ -29,8 +29,8 @@ from jinja2 import Environment
 from pylxd import Client
 from pylxd.exceptions import LXDAPIException
 from mvar import MVar
-from fog05sdk.interfaces.States import State
-from fog05sdk.interfaces.RuntimePluginFDU import *
+from fog05_sdk.interfaces.States import State
+from fog05_sdk.interfaces.RuntimePluginFDU import *
 from LXDFDU import LXDFDU
 
 

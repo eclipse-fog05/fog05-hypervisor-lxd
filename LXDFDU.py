@@ -15,8 +15,8 @@
 import sys
 import os
 import json
-from fog05sdk.interfaces.States import State
-from fog05sdk.interfaces.InfraFDU import InfraFDU
+from fog05_sdk.interfaces.States import State
+from fog05_sdk.interfaces.InfraFDU import InfraFDU
 
 
 
