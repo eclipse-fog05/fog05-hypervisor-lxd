@@ -6,7 +6,7 @@ After=fos_agent.target
 [Service]
 Type=simple
 PIDFile=/var/fos/os/os.pid
-ExecStart = /etc/fos/plugins/LXD/LXD_plugin /etc/fos/plugins/LXD/LXD_plugin.json
+ExecStart = /etc/fos/plugins//plugin-fdu-lxd/LXD_plugin /etc/fos/plugins//plugin-fdu-lxd/LXD_plugin.json
 KillMode=process
 Restart=on-failure
 User=fos
