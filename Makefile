@@ -7,32 +7,40 @@ ETC_FOS_DIR = /etc/fos/
 VAR_FOS_DIR = /var/fos/
 FOS_CONF_FILE = /etc/fos/agent.json
 LXD_PLUGIN_DIR = /etc/fos/plugins/plugin-fdu-lxd
-LLXD_PLUGIN_CONFFILE = /etc/fos/plugins/plugin-fdu-lxd/LXD_plugin.json
+LXD_PLUGIN_CONFFILE = $(LXD_PLUGIN_DIR)/LXD_plugin.json
+SYSTEMD_DIR = /lib/systemd/system/
+
+clean:
+	echo "Nothing to do"
+
 all:
 	echo "Nothing to do..."
 
 install:
-	sudo pip3 install pylxd jinja2 packaging
-	sudo usermod -aG lxd fos
+	# sudo pip3 install pylxd jinja2 packaging
+	# sudo usermod -aG lxd fos
 ifeq "$(wildcard $(LXD_PLUGIN_DIR))" ""
-	sudo cp -r ../plugin-fdu-lxd /etc/fos/plugins/
+	mkdir -p $(LXD_PLUGIN_DIR)
+	sudo cp -r ./templates $(LXD_PLUGIN_DIR)
+	sudo cp ./__init__.py $(LXD_PLUGIN_DIR)
+	sudo cp ./LXD_plugin $(LXD_PLUGIN_DIR)
+	sudo cp ./LXDFDU.py $(LXD_PLUGIN_DIR)
+	sudo cp ./README.md $(LXD_PLUGIN_DIR)
+	sudo cp ./LXD_plugin.json  $(LXD_PLUGIN_DIR)
 else
-	sudo cp -r ../plugin-fdu-lxd/templates /etc/fos/plugins/plugin-fdu-lxd/
-	sudo cp ../plugin-fdu-lxd/__init__.py /etc/fos/plugins/plugin-fdu-lxd/
-	sudo cp ../plugin-fdu-lxd/LXD_plugin /etc/fos/plugins/plugin-fdu-lxd/
-	# sudo cp ../LXD/LXD_plugin.json /etc/fos/plugins/LXD/
-	sudo cp ../plugin-fdu-lxd/LXDFDU.py /etc/fos/plugins/plugin-fdu-lxd/
-	sudo cp ../plugin-fdu-lxd/README.md /etc/fos/plugins/plugin-fdu-lxd/
-	sudo ln -sf /etc/fos/plugins/plugin-fdu-lxd/LXD_plugin /usr/bin/fos_lxd
+	sudo cp -r ./templates $(LXD_PLUGIN_DIR)
+	sudo cp ./__init__.py $(LXD_PLUGIN_DIR)
+	sudo cp ./LXD_plugin $(LXD_PLUGIN_DIR)
+	sudo cp ./LXDFDU.py $(LXD_PLUGIN_DIR)
+	sudo cp ./README.md $(LXD_PLUGIN_DIR)
 endif
-	sudo cp /etc/fos/plugins/plugin-fdu-lxd/fos_lxd.service /lib/systemd/system/
-	sudo sh -c "echo $(UUID) | xargs -i  jq  '.configuration.nodeid = \"{}\"' /etc/fos/plugins/plugin-fdu-lxd/LXD_plugin.json > /tmp/LXD_plugin.tmp && mv /tmp/LXD_plugin.tmp /etc/fos/plugins/plugin-fdu-lxd/LXD_plugin.json"
+	sudo cp ./fos_lxd.service $(SYSTEMD_DIR)
+	sudo sh -c "echo $(UUID) | xargs -i  jq  '.configuration.nodeid = \"{}\"' $(LXD_PLUGIN_CONFFILE) > /tmp/LXD_plugin.tmp && mv /tmp/LXD_plugin.tmp $(LXD_PLUGIN_CONFFILE)"
 
 
 uninstall:
 	sudo systemctl disable fos_lxd
 	gpasswd -d fos lxd
-	sudo rm -rf /etc/fos/plugins/plugin-fdu-lxd
-	sudo rm -rf /var/fos/lxd
-	sudo rm /lib/systemd/system/fos_lxd.service
-	sudo rm -rf /usr/bin/fos_lxd
+	sudo rm -rf $(LXD_PLUGIN_DIR)
+	sudo rm -rf $(VAR_FOS_DIR)/lxd
+	sudo rm $(SYSTEMD_DIR)/fos_lxd.service
