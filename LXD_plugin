@@ -642,6 +642,7 @@ class LXD(RuntimePluginFDU):
 
 
     def migrate_fdu(self, instance_uuid):
+        self.logger.info('migrate_fdu()', '[ INIT ] Init Migration')
         record = self.connector.loc.desired.get_node_fdu(self.node, self.uuid, '*', instance_uuid)
         record = LXDFDU(record)
         fdu_uuid = record.get_fdu_id()
@@ -704,6 +705,7 @@ class LXD(RuntimePluginFDU):
             #
             #
         else:
+            self.logger.info('migrate_fdu()', '[ DONE ] LXD Plugin - Destination Node preparation...')
             record.set_status('DEFINE')
             self.connector.loc.actual.add_node_fdu(self.node, self.uuid, fdu_uuid, instance_uuid, record)
             fdu = LXDFDU(record)
