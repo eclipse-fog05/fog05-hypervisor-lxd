@@ -328,10 +328,10 @@ class LXD(RuntimePluginFDU):
                 c.delete()
             except Exception as e:
                 self.logger.info('undefine_fdu()', '[ ERRO ] LXD Plugin - Undefine a Container Exception raised {}'.format(e))
-                fdu.status = 'ERROR'
-                self.current_fdus.update({instance_uuid: fdu})
-                self.write_fdu_error(fdu_uuid, instance_uuid, 1, e)
-                return
+                # fdu.status = 'ERROR'
+                # self.current_fdus.update({instance_uuid: fdu})
+                # self.write_fdu_error(fdu_uuid, instance_uuid, 1, e)
+                # return
 
 
             try:
@@ -570,6 +570,7 @@ class LXD(RuntimePluginFDU):
                                              'FDU {} not in runtime {}'.format(instance_uuid, self.uuid))
         elif fdu.get_status() != State.RUNNING:
             self.logger.error('stop_fdu()', 'LXD Plugin - FDU state is wrong, or transition not allowed')
+            self.logger.error('stop_fdu()', 'LXD Plugin - FDU state is {} expected {}'.format(fdu.get_status(), State.RUNNING))
             raise StateTransitionNotAllowedException('FDU is not in RUNNING state',
                                                      'FDU {} is not in RUNNING state'.format(instance_uuid))
         else:
@@ -830,34 +831,74 @@ class LXD(RuntimePluginFDU):
             # self.connector.loc.actual.add_node_flavor(self.node, self.uuid, fl_uuid, flavor)
 
             # vNetwork configurations
-            for cp in record.get_connection_points():
-                cp_id = cp.get('uuid')
-                # cp_record = {
-                #     'cp_uuid':cp_id,
-                #     'status':'CREATE'}
-                self.connector.loc.desired.add_node_port(self.node, self.nm.uuid, cp_id,cp)
-                res = self.connector.loc.actual.get_node_port(self.node, self.nm.uuid, cp_id)
-                while res is None:
+
+            self.logger.info('migrate_fdu()', '[ INFO ] LXD Plugin - Creating profile...')
+            try:
+                custom_profile_for_fdu = self.conn.profiles.create(instance_uuid)
+
+                conf = {'environment.FOSUUID': fdu_uuid,
+                        'environment.FOSINSTANCEUUID': instance_uuid,
+                        'environment.FOSNODEUUID': self.node,
+                        'limits.cpu': str(record.get_computation_requirements().get('cpu_min_count')),
+                        'limits.memory':'{}MB'.format(int(record.get_computation_requirements().get('ram_size_mb')))
+                        }
+                if record.get_configuration() is not None:
+                    if record.get_configuration().conf_type in ['CLOUD_INIT']:
+                        c_init_file = record.get_configuration().script
+                        self.logger.info('migrate_fdu()', '[ INFO ] LXD Plugin - FDU has configuration: {}'.format(c_init_file))
+                        conf = self.__generate_custom_profile_userdata_configuration(c_init_file, conf)
+
+
+
+                for cp in record.get_connection_points():
+                    cp_id = cp.get('uuid')
+                    # cp_record = {
+                    #     'cp_uuid':cp_id,
+                    #     'status':'CREATE'}
+                    self.connector.loc.desired.add_node_port(self.node, self.nm.uuid, cp_id,cp)
                     res = self.connector.loc.actual.get_node_port(self.node, self.nm.uuid, cp_id)
-                cp.update({'status' :'CONNECTED'})
-            i = 0
-            for intf in record.get_interfaces():
-                intf_name = intf.get('vintf_name')
-                mac = intf.get('mac_address', self.__generate_random_mac())
-                intf.update({'mac_address': mac})
-                if intf.get('virtual_interface').get('intf_type').upper() in ['PHYSICAL','BRIDGED']:
-                    real_intf_name = intf.get('phy_face')
-                    if self.os.get_intf_type(real_intf_name) in ['ethernet']:
-                        self.os.set_interface_unaviable(real_intf_name)
-                    elif self.os.get_intf_type(real_intf_name) in ['wireless']:
-                        self.os.set_interface_unaviable(real_intf_name)
-                    else:
-                        pass
-                else:
-                    intf_id = 'lxd-{}-{}'.format(record.get_short_id(), i)
-                    intf_data = self.nm.create_virtual_interface(intf_id, intf)
-                    self.logger.info('migrate_fdu()','LXD Plugin - Interface info {}'.format(intf_data))
-                i += 1
+                    while res is None:
+                        res = self.connector.loc.actual.get_node_port(self.node, self.nm.uuid, cp_id)
+                    cp.update({'status' :'CONNECTED'})
+                i = 0
+
+                dev, interfaces = self.__generate_custom_profile_devices_configuration(record)
+
+                self.logger.info('migrate_fdu()', '[ INFO ] Profile devices {}'.format(dev))
+                # if fdu.devices:
+                #     for d in fdu.devices:
+                #         dev.update(d)
+                self.logger.info('migrate_fdu()', 'LXD Plugin - Devices {}'.format(dev))
+                custom_profile_for_fdu.config = conf
+                custom_profile_for_fdu.devices = dev
+                custom_profile_for_fdu.save()
+
+            except LXDAPIException as e:
+                self.logger.error('migrate_fdu()', 'Error {}'.format(e))
+                fdu.set_status('ERROR')
+                self.current_fdus.update({instance_uuid: fdu})
+                self.write_fdu_error(fdu_uuid, instance_uuid, 2, e)
+                return
+
+                # for intf in record.get_interfaces():
+                #     intf_name = intf.get('vintf_name')
+                #     mac = intf.get('mac_address', self.__generate_random_mac())
+                #     intf.update({'mac_address': mac})
+                #     if intf.get('virtual_interface').get('intf_type').upper() in ['PHYSICAL','BRIDGED']:
+                #         real_intf_name = intf.get('phy_face')
+                #         if self.os.get_intf_type(real_intf_name) in ['ethernet']:
+                #             self.os.set_interface_unaviable(real_intf_name)
+                #         elif self.os.get_intf_type(real_intf_name) in ['wireless']:
+                #             self.os.set_interface_unaviable(real_intf_name)
+                #         else:
+                #             pass
+                #     else:
+                #         intf_id = 'lxd-{}-{}'.format(record.get_short_id(), i)
+                #         intf_data = self.nm.create_virtual_interface(intf_id, intf)
+                #         self.logger.info('migrate_fdu()','LXD Plugin - Interface info {}'.format(intf_data))
+                #     i += 1
+
+
 
             record.set_status('LAND')
             self.logger.info('migrate_fdu()', '[ DONE ] LXD Plugin - Record {}'.format(record.to_json()))
@@ -880,11 +921,10 @@ class LXD(RuntimePluginFDU):
                 time.sleep(2)
 
             record.on_start()
-            self.current_fdus.update({instance_uuid: record})
             record.set_migration_properties('','')
-            record.set_status('RUN')
+            self.current_fdus.update({instance_uuid: record})
             self.logger.info('migrate_fdu()', '[ DONE ] LXD Plugin - Record {}'.format(record.to_json()))
-            self.connector.loc.actual.add_node_fdu(self.node, self.uuid, fdu_uuid, instance_uuid,record.to_json())
+            self.update_fdu_status(fdu_uuid, instance_uuid, 'RUN')
             self.logger.info('migrate_fdu()', '[ DONE ] LXD Plugin - Migrate a Container uuid {}'.format(instance_uuid))
 
 
