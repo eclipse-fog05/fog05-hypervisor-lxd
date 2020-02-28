@@ -876,7 +876,7 @@ class LXD(RuntimePluginFDU):
                         c.sync()
                         self.logger.info('migrate_fdu()',  ' LXD Plugin - Container in this host but not running - Destination: {} FDU: {} Instance: {}'.format(destination, fdu_uuid, instance_uuid))
                 except Exception as e:
-                   self.logger.info('migrate_fdu()', ' LXD Plugin - Container not already in this host - Destination: {} FDU: {} Instance: {}'.format(destination, fdu_uuid, instance_uuid))
+                   self.logger.info('migrate_fdu()', ' LXD Plugin - Container not already in this host - Destination: {} FDU: {} Instance: {} - Error {}'.format(destination, fdu_uuid, instance_uuid, e))
                 time.sleep(2)
 
             record.on_start()
