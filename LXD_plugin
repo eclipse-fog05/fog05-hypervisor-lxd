@@ -511,6 +511,7 @@ class LXD(RuntimePluginFDU):
                 self.connector.loc.desired.add_node_port(self.node, self.nm.uuid, cp_id, cp)
                 # self.nm.delete_port(cp_id)
 
+            self.mon_instances.remove((fdu_uuid, instance_uuid, fdu.name))
             self.current_fdus.update({instance_uuid: fdu})
             self.update_fdu_status(fdu_uuid, instance_uuid, 'DEFINE')
             self.logger.info('clean_fdu()', '[ DONE ] LXD Plugin - Clean a Container uuid {} '.format(instance_uuid))
@@ -553,7 +554,7 @@ class LXD(RuntimePluginFDU):
             fm.put('/etc/profile.d/99-fos', envs, mode="0644")
             fdu.on_start()
 
-            self.mon_instances.remove((fdu_uuid, instance_uuid, fdu.name))
+
 
             self.current_fdus.update({instance_uuid: fdu})
             self.update_fdu_status(fdu_uuid, instance_uuid, 'RUN')
