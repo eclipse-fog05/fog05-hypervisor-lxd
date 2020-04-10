@@ -217,16 +217,21 @@ class LXD(RuntimePluginFDU):
         img_info = {}
         try:
 
-            if fdu.get_image_uri().startswith('lxd://') or fdu.get_image_uri().startswith('ubuntu://'):
+            if fdu.get_image_uri().startswith('lxd://') or fdu.get_image_uri().startswith('ubuntu://') or fdu.get_image_uri().startswith('custom://'):
                 try:
                     if fdu.get_image_uri().startswith('lxd://'):
                         img_alias = fdu.get_image_uri()[6:]
                         self.logger.info('define_fdu()','Image is coming from LXD repository: {}'.format(img_alias))
                         lxd_img = self.conn.images.create_from_simplestreams(server=self.IMAGE_SERVER, alias=img_alias)
-                    else:
+                    elif fdu.get_image_uri().startswith('ubuntu://'):
                         img_alias = fdu.get_image_uri()[9:]
                         self.logger.info('define_fdu()','Image is coming from Ubuntu repository: {}'.format(img_alias))
                         lxd_img = self.conn.images.create_from_simplestreams(server=self.UBUNTU_IMAGE_SERVER, alias=img_alias)
+                    else:
+                        img_alias = '/'.join(fdu.get_image_uri()[9:].split('/')[-2:])
+                        img_server = 'https://{}'.format('/'.join(fdu.get_image_uri()[9:].split('/')[:-2]))
+                        self.logger.info('define_fdu()','Image is coming from Custom repository: {} - {}'.format(img_server, img_alias))
+                        lxd_img = self.conn.images.create_from_simplestreams(server=img_server, alias=img_alias)
                     lxd_img.add_alias(fdu_uuid, description='')
                 except LXDAPIException as e:
                     self.logger.info('define_fdu()', '[ ERRO ] LXD Plugin - LXDAPIException when fetching image: {}'.format(e))
@@ -737,16 +742,21 @@ class LXD(RuntimePluginFDU):
                         self.os.execute_command(cmd, blocking=True)
                 img_info = {}
                 try:
-                    if record.get_image_uri().startswith('lxd://') or record.get_image_uri().startswith('ubuntu://'):
+                    if fdu.get_image_uri().startswith('lxd://') or fdu.get_image_uri().startswith('ubuntu://') or fdu.get_image_uri().startswith('custom://'):
                         try:
-                            if record.get_image_uri().startswith('lxd://'):
-                                img_alias = record.get_image_uri()[6:]
-                                self.logger.info('migrate_fdu()','Image is coming from LXD repository: {}'.format(img_alias))
+                            if fdu.get_image_uri().startswith('lxd://'):
+                                img_alias = fdu.get_image_uri()[6:]
+                                self.logger.info('define_fdu()','Image is coming from LXD repository: {}'.format(img_alias))
                                 lxd_img = self.conn.images.create_from_simplestreams(server=self.IMAGE_SERVER, alias=img_alias)
-                            else:
-                                img_alias = record.get_image_uri()[9:]
-                                self.logger.info('migrate_fdu()','Image is coming from Ubuntu repository: {}'.format(img_alias))
+                            elif fdu.get_image_uri().startswith('ubuntu://'):
+                                img_alias = fdu.get_image_uri()[9:]
+                                self.logger.info('define_fdu()','Image is coming from Ubuntu repository: {}'.format(img_alias))
                                 lxd_img = self.conn.images.create_from_simplestreams(server=self.UBUNTU_IMAGE_SERVER, alias=img_alias)
+                            else:
+                                img_alias = '/'.join(fdu.get_image_uri()[9:].split('/')[-2:])
+                                img_server = 'https://{}'.format('/'.join(fdu.get_image_uri()[9:].split('/')[:-2]))
+                                self.logger.info('define_fdu()','Image is coming from Custom repository: {} - {}'.format(img_server, img_alias))
+                                lxd_img = self.conn.images.create_from_simplestreams(server=img_server, alias=img_alias)
                             lxd_img.add_alias(fdu_uuid, description='')
                         except LXDAPIException as e:
                             self.logger.info('migrate_fdu()', '[ ERRO ] LXD Plugin - LXDAPIException when fetching image: {}'.format(e))
