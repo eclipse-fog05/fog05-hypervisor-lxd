@@ -1294,17 +1294,17 @@ class LXD(RuntimePluginFDU):
         }
         return r.get(action, None)
 
-        def __parse_environment(self, env):
-            d_env = {}
-            if env == "":
-                return d_env
-            env = env.split(',')
-            for e in env:
-                ev = e.split('=')
-                k = ev[0]
-                v = ev[1]
-                d_env.update({'environment.{}'.format(k):v})
+    def __parse_environment(self, env):
+        d_env = {}
+        if env == "":
             return d_env
+        env = env.split(',')
+        for e in env:
+            ev = e.split('=')
+            k = ev[0]
+            v = ev[1]
+            d_env.update({'environment.{}'.format(k):v})
+        return d_env
 
 
 def read_file(file_path):
