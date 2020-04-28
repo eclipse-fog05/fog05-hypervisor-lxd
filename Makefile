@@ -18,7 +18,9 @@ all:
 
 install:
 	sudo pip3 install pylxd jinja2 packaging
+ifndef CI
 	sudo usermod -aG lxd fos
+endif
 ifeq "$(wildcard $(LXD_PLUGIN_DIR))" ""
 	mkdir -p $(LXD_PLUGIN_DIR)
 	sudo cp -r ./templates $(LXD_PLUGIN_DIR)
