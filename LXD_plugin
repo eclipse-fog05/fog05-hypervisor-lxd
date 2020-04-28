@@ -33,7 +33,7 @@ from mvar import MVar
 from fog05_sdk.interfaces.States import State
 from fog05_sdk.interfaces.RuntimePluginFDU import *
 from LXDFDU import LXDFDU
-
+from functools import partial
 
 class LXD(RuntimePluginFDU):
 
@@ -472,12 +472,28 @@ class LXD(RuntimePluginFDU):
             self.connector.loc.actual.add_node_fdu(self.node, self.uuid, fdu_uuid,instance_uuid, record.to_json())
             # self.update_fdu_status(fdu_uuid, instance_uuid, 'CONFIGURE')
 
-            # TODO: monitoring TBA
-            # this monitoring uses pylxd to get container information
 
             self.mon_instances.append((fdu_uuid, instance_uuid, fdu.name))
 
-            self.logger.info('run_fdu()', '[ DONE ] LXD Plugin - Starting a Monitoring of {}'.format(instance_uuid))
+
+            self.logger.info('configure_fdu()', '[ INFO ] LXD Plugin - Registreting start/run/log/ls/file evals for {}'.format(instance_uuid))
+            start_fun  = partial(self.start_fdu, instance_uuid)
+            run_fun  = partial(self.run_fdu, instance_uuid)
+            log_fun  = partial(self.get_log_fdu, instance_uuid)
+            ls_fun  = partial(self.get_ls_fdu, instance_uuid)
+            file_fun  = partial(self.get_file_fdu, instance_uuid)
+
+            try:
+                self.connector.loc.actual.add_plugin_fdu_start_eval(self.node, self.uuid, fdu_uuid, instance_uuid, start_fun)
+                self.connector.loc.actual.add_plugin_fdu_run_eval(self.node, self.uuid, fdu_uuid, instance_uuid, run_fun)
+                self.connector.loc.actual.add_plugin_fdu_log_eval(self.node, self.uuid, fdu_uuid, instance_uuid, log_fun)
+                self.connector.loc.actual.add_plugin_fdu_ls_eval(self.node, self.uuid, fdu_uuid, instance_uuid, ls_fun)
+                self.connector.loc.actual.add_plugin_fdu_file_eval(self.node, self.uuid, fdu_uuid, instance_uuid, file_fun)
+            except Exception as e:
+                self.logger.error('configure_fdu()', '[ ERRO ] LXD Plugin - Error in registering start/run/log/ls/file function: {}'.format(e))
+                traceback.print_exc()
+
+            self.logger.info('configure_fdu()', '[ DONE ] LXD Plugin - Starting a Monitoring of {}'.format(instance_uuid))
 
     def clean_fdu(self, instance_uuid):
 
@@ -519,52 +535,80 @@ class LXD(RuntimePluginFDU):
             self.mon_instances.remove((fdu_uuid, instance_uuid, fdu.name))
             self.current_fdus.update({instance_uuid: fdu})
             self.update_fdu_status(fdu_uuid, instance_uuid, 'DEFINE')
+
+
+            self.logger.info('clean_fdu()', '[ INFO ] LXD Plugin - Unregistering start/run/log/ls/file evals for {}'.format(instance_uuid))
+            self.connector.loc.actual.remove_plugin_fdu_start_eval(self.node, self.uuid, fdu_uuid, instance_uuid)
+            self.connector.loc.actual.remove_plugin_fdu_run_eval(self.node, self.uuid, fdu_uuid, instance_uuid)
+            self.connector.loc.actual.remove_plugin_fdu_log_eval(self.node, self.uuid, fdu_uuid, instance_uuid)
+            self.connector.loc.actual.remove_plugin_fdu_ls_eval(self.node, self.uuid, fdu_uuid, instance_uuid)
+            self.connector.loc.actual.remove_plugin_fdu_file_eval(self.node, self.uuid, fdu_uuid, instance_uuid)
+
             self.logger.info('clean_fdu()', '[ DONE ] LXD Plugin - Clean a Container uuid {} '.format(instance_uuid))
 
             return True
 
-    def run_fdu(self, instance_uuid):
-        self.logger.info('run_fdu()', ' LXD Plugin - Starting a Container uuid {}'.format(instance_uuid))
-        fdu = self.current_fdus.get(instance_uuid, None)
-        if fdu is None:
-            self.logger.error('run_fdu()', 'LXD Plugin - FDU not exists')
-            raise FDUNotExistingException('FDU not existing',
-                                             'FDU {} not in runtime {}'.format(instance_uuid, self.uuid))
-        elif fdu.get_status() != State.CONFIGURED:
-            self.logger.error('run_fdu()', 'LXD Plugin - FDU state is wrong, or transition not allowed')
-            raise StateTransitionNotAllowedException('FDU is not in CONFIGURED state',
-                                                     'FDU {} is not in CONFIGURED state'.format(instance_uuid))
-        else:
-            fdu_uuid = fdu.get_fdu_id()
-            self.current_fdus.update({instance_uuid: fdu})
-            self.update_fdu_status(fdu_uuid, instance_uuid, 'STARTING')
-            self.logger.info('run_fdu()', '[ INFO ] LXD Plugin - Container Name {}'.format(fdu.name))
-            c = self.conn.containers.get(fdu.name)
-            c.start()
-            while c.status != 'Running':
-                try:
-                    c.sync()
-                except Exception as e:
-                    self.logger.info('run_fdu()', '[ ERR ] LXD Plugin - {}'.format(e))
-                    fdu.status = 'ERROR'
-                    self.current_fdus.update({instance_uuid: fdu})
-                    self.write_fdu_error(fdu_uuid, instance_uuid, 4, e)
-                    return
+    def start_fdu(self, instance_uuid, env):
+        self.logger.info('start_fdu()', ' LXD Plugin - Starting a Container uuid {}'.format(instance_uuid))
+        env = self.__parse_environment(env)
+        self.logger.info('start_fdu()', ' LXD Plugin - Environment variables {}'.format(env))
+        try:
+            fdu = self.current_fdus.get(instance_uuid, None)
+            if fdu is None:
+                self.logger.error('start_fdu()', 'LXD Plugin - FDU not exists')
+                return {'error': 'FDU not exists'}
+            elif fdu.get_status() != State.CONFIGURED:
+                self.logger.error('start_fdu()', 'LXD Plugin - FDU state is wrong, or transition not allowed')
+                return {'error': 'FDU is not in CONFIGURED state'}
+            else:
+                fdu_uuid = fdu.get_fdu_id()
+                self.current_fdus.update({instance_uuid: fdu})
+                self.update_fdu_status(fdu_uuid, instance_uuid, 'STARTING')
+                self.logger.info('start_fdu()', '[ INFO ] LXD Plugin - Container Name {}'.format(fdu.name))
+                c = self.conn.containers.get(fdu.name)
 
-            fm = c.FilesManager(self.conn, c)
-            envs = 'export FOSUUID={} \n' \
-                    'environment.FOSINSTANCEUUID={} \n' \
-                    'export FOSNODEUUID={}'\
-                .format(fdu_uuid,instance_uuid , self.node)
-            fm.put('/etc/profile.d/99-fos', envs, mode="0644")
-            fdu.on_start()
+                p = self.conn.profiles.get(instance_uuid)
+                if p is None:
+                    self.logger.error('start_fdu()', '[ ERRO ] Profile is none for {}'.format(fdu.name))
+                    return {'error': 'Unable to start:  Profile is none'}
+
+                p.config.update(env)
+                p.save()
+                p.sync()
+
+                c.start()
+                while c.status != 'Running':
+                    try:
+                        c.sync()
+                    except Exception as e:
+                        self.logger.error('start_fdu()', '[ ERR ] LXD Plugin - {}'.format(e))
+                        fdu.status = 'ERROR'
+                        self.current_fdus.update({instance_uuid: fdu})
+                        self.write_fdu_error(fdu_uuid, instance_uuid, 4, e)
+                        return {'error': '{}'.format(e)}
+
+                fm = c.FilesManager(self.conn, c)
+                envs = 'export FOSUUID={} \n' \
+                        'environment.FOSINSTANCEUUID={} \n' \
+                        'export FOSNODEUUID={}'\
+                    .format(fdu_uuid,instance_uuid , self.node)
+                fm.put('/etc/profile.d/99-fos', envs, mode="0644")
+                fdu.on_start()
 
 
 
-            self.current_fdus.update({instance_uuid: fdu})
-            self.update_fdu_status(fdu_uuid, instance_uuid, 'RUN')
-            self.logger.info('run_fdu()', '[ DONE ] LXD Plugin - Starting a Container uuid {}'.format(instance_uuid))
+                self.current_fdus.update({instance_uuid: fdu})
+                self.update_fdu_status(fdu_uuid, instance_uuid, 'RUN')
+                self.logger.info('start_fdu()', '[ DONE ] LXD Plugin - Starting a Container uuid {}'.format(instance_uuid))
 
+                return {'result': instance_uuid}
+        except Exception as e:
+            self.logger.info('start_fdu()', '[ ERRO ] LXD Plugin - Error: {}'.format(e))
+            traceback.print_exc()
+            return {'error':'{}'.format(e)}
+
+    def run_fdu(self, instance_uuid, ignored):
+        return {'error':'LXD FDU {} cannot be run, use start instead'.format(instance_uuid)}
 
 
     def stop_fdu(self, instance_uuid):
@@ -940,14 +984,6 @@ class LXD(RuntimePluginFDU):
 
 
 
-    def before_migrate_entity_actions(self, instance_uuid, dst=False):
-        pass
-
-    def after_migrate_entity_actions(self, instance_uuid, dst=False):
-        pass
-
-
-
     def connect_interface_to_cp(self, cpid, instanceid, iface):
         self.logger.error('connect_interface_to_cp()', 'CP {} <->  {}:{}'.format(cpid, instanceid, iface))
         try:
@@ -1008,6 +1044,15 @@ class LXD(RuntimePluginFDU):
             if r.get('result') is not None:
                 return {'result':iface}
             return {'error':503, 'error_msg': 'Unable to disconnect interface {} to cp'.format(iface)}
+
+    def get_log_fdu(self, instance_uuid, unit):
+        return {'error':'LXD FDU {} cannot get log'.format(instance_uuid)}
+
+    def get_ls_fdu(self, instance_uuid, unit):
+        return {'error':'LXD FDU {} cannot get ls'.format(instance_uuid)}
+
+    def get_file_fdu(self, instance_uuid, filename):
+        return {'error':'LXD FDU {} cannot get file'.format(instance_uuid)}
 
     def __monitor_instance(self):
         self.logger.info('__monitor_instance()','[ INFO ] LXD Plugin - Staring monitoring of FDUs')
@@ -1188,53 +1233,7 @@ class LXD(RuntimePluginFDU):
     def __get_bridge_names_from_instance_networks(self, instance_networks):
         return [network['br_name'] for network in instance_networks]
 
-    # def __add_image(self, manifest):
-    #     url = manifest.get('base_image')
-    #     uuid = manifest.get('uuid')
-    #     if url.startswith('http'):
-    #         image_name = os.path.join(self.BASE_DIR, self.IMAGE_DIR, url.split('/')[-1])
-    #         self.agent.get_os_plugin().download_file(url, image_name)
-    #     elif url.startswith('file://'):
-    #         image_name = os.path.join(self.BASE_DIR, self.IMAGE_DIR, url.split('/')[-1])
-    #         cmd = 'cp {} {}'.format(url[len('file://'):], image_name)
-    #         self.agent.get_os_plugin().execute_command(cmd, True)
 
-    #     self.logger.info('__add_image()', '[ INFO ] LXD Plugin - Loading image data from: {}'.format(os.path.join(self.BASE_DIR, self.IMAGE_DIR, url)))
-    #     image_data = self.agent.get_os_plugin().read_binary_file(os.path.join(self.BASE_DIR, self.IMAGE_DIR, image_name))
-    #     self.logger.info('__add_image()', '[ DONE ] LXD Plugin - Loading image data from: {}'.format(os.path.join(self.BASE_DIR, self.IMAGE_DIR, url)))
-    #     img_info = {'url': url, 'path': image_name, 'uuid': uuid}
-
-    #     self.logger.info('__add_image()', '[ INFO ] LXD Plugin - Creating image with alias {}'.format(uuid))
-    #     img = self.conn.images.create(image_data, public=True, wait=True)
-    #     img.add_alias(uuid, description=image_name)
-    #     self.logger.info('__add_image()', '[ DONE ] LXD Plugin - Created image with alias {}'.format(uuid))
-    #     self.images.update({uuid: img_info})
-    #     manifest.update({'path': image_name})
-    #     uri = '{}/{}'.format(self.HOME_IMAGE, manifest.get('uuid'))
-    #     self.__update_actual_store(uri, manifest)
-
-    # def __remove_image(self, image_uuid):
-    #     image = self.images.get(image_uuid, None)
-    #     if image is None:
-    #         self.logger.info('__remove_image()', ' LXD Plugin - Image not found!!')
-    #         return
-    #     self.agent.get_os_plugin().remove_file(image.get('path'))
-    #     self.images.pop(image_uuid)
-    #     uri = '{}/{}'.format(self.HOME_IMAGE, image_uuid)
-    #     self.__pop_actual_store(uri)
-
-    # def __add_flavor(self, manifest):
-    #     uri = '{}/{}'.format(self.HOME_FLAVOR, manifest.get('uuid'))
-    #     self.__update_actual_store(uri, manifest)
-    #     self.flavors.update({manifest.get('uuid'): manifest})
-
-    # def __remove_flavor(self, flavor_uuid):
-    #     self.flavors.pop(flavor_uuid)
-    #     uri = '{}/{}'.format(self.HOME_FLAVOR, flavor_uuid)
-    #     self.__pop_actual_store(uri)
-
-
-    # TODO: add try catch for the exceptions
     def __fdu_observer(self, fdu_info):
         self.logger.info('__fdu_observer()', ' LXD Plugin - New Action of a FDU - FDU Info: {}'.format(fdu_info))
         action = fdu_info.get('status')
@@ -1289,13 +1288,23 @@ class LXD(RuntimePluginFDU):
             'CONFIGURE': self.configure_fdu,
             'STOP': self.stop_fdu,
             'RESUME': self.resume_fdu,
-            'RUN': self.run_fdu,
             'CLEAN': self.clean_fdu,
             'LAND': self.migrate_fdu,
             'TAKE_OFF': self.migrate_fdu
         }
-
         return r.get(action, None)
+
+    def __parse_environment(self, env):
+        d_env = {}
+        if env == "":
+            return d_env
+        env = env.split(',')
+        for e in env:
+            ev = e.split('=')
+            k = ev[0]
+            v = ev[1]
+            d_env.update({'environment.{}'.format(k):v})
+        return d_env
 
 
 def read_file(file_path):
