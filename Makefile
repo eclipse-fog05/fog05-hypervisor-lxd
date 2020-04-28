@@ -17,8 +17,8 @@ all:
 	echo "Nothing to do..."
 
 install:
-	# sudo pip3 install pylxd jinja2 packaging
-	# sudo usermod -aG lxd fos
+	sudo pip3 install pylxd jinja2 packaging
+	sudo usermod -aG lxd fos
 ifeq "$(wildcard $(LXD_PLUGIN_DIR))" ""
 	mkdir -p $(LXD_PLUGIN_DIR)
 	sudo cp -r ./templates $(LXD_PLUGIN_DIR)
