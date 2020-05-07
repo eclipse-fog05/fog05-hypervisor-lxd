@@ -532,7 +532,9 @@ class LXD(RuntimePluginFDU):
                 self.connector.loc.desired.add_node_port(self.node, self.nm.uuid, cp_id, cp)
                 # self.nm.delete_port(cp_id)
 
-            self.mon_instances.remove((fdu_uuid, instance_uuid, fdu.name))
+
+            if  (fdu_uuid, instance_uuid, fdu.name) in self.mon_instances:
+                self.mon_instances.remove((fdu_uuid, instance_uuid, fdu.name))
             self.current_fdus.update({instance_uuid: fdu})
             self.update_fdu_status(fdu_uuid, instance_uuid, 'DEFINE')
 
