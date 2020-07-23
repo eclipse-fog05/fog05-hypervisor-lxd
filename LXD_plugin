@@ -577,22 +577,22 @@ class LXD(RuntimePluginFDU):
                 p.sync()
 
                 c.start()
-                while c.status != 'Running':
-                    try:
-                        c.sync()
-                    except Exception as e:
-                        self.logger.error('start_fdu()', '[ ERR ] LXD Plugin - {}'.format(e))
-                        fdu.status = 'ERROR'
-                        self.current_fdus.update({instance_uuid: fdu})
-                        self.write_fdu_error(fdu_uuid, instance_uuid, 4, e)
-                        return {'error': '{}'.format(e)}
+                # while c.status != 'Running':
+                #     try:
+                #         c.sync()
+                #     except Exception as e:
+                #         self.logger.error('start_fdu()', '[ ERR ] LXD Plugin - {}'.format(e))
+                #         fdu.status = 'ERROR'
+                #         self.current_fdus.update({instance_uuid: fdu})
+                #         self.write_fdu_error(fdu_uuid, instance_uuid, 4, e)
+                #         return {'error': '{}'.format(e)}
 
-                fm = c.FilesManager(self.conn, c)
-                envs = 'export FOSUUID={} \n' \
-                        'environment.FOSINSTANCEUUID={} \n' \
-                        'export FOSNODEUUID={}'\
-                    .format(fdu_uuid,instance_uuid , self.node)
-                fm.put('/etc/profile.d/99-fos', envs, mode="0644")
+                # fm = c.FilesManager(self.conn, c)
+                # envs = 'export FOSUUID={} \n' \
+                #         'environment.FOSINSTANCEUUID={} \n' \
+                #         'export FOSNODEUUID={}'\
+                #     .format(fdu_uuid,instance_uuid , self.node)
+                # fm.put('/etc/profile.d/99-fos', envs, mode="0644")
                 fdu.on_start()
 
 
